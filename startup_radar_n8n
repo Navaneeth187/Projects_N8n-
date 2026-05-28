@@ -1,0 +1,311 @@
+{
+  "name": "AI Startup Radar",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+        "options": {}
+      },
+      "id": "2",
+      "name": "Fetch HackerNews IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ids = items[0].json.slice(0, 5);\nreturn ids.map(id => ({ json: { id } }));"
+      },
+      "id": "3",
+      "name": "Limit HN IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://hacker-news.firebaseio.com/v0/item/{{$json[\"id\"]}}.json",
+        "options": {}
+      },
+      "id": "4",
+      "name": "Fetch HN Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        950,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/startups/hot.json?limit=5",
+        "options": {}
+      },
+      "id": "5",
+      "name": "Fetch Reddit Startups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items[0].json.data.children.map(post => ({\n  json: {\n    source: 'Reddit',\n    title: post.data.title,\n    url: post.data.url,\n    score: post.data.score\n  }\n}));"
+      },
+      "id": "6",
+      "name": "Format Reddit Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "7",
+      "name": "Merge Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1200,
+        330
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "You are an AI startup analyst. Analyze these startup/news trends and return:\\n1. Main trend\\n2. Opportunity score /10\\n3. Startup idea\\n4. Market demand\\n5. Risks\\n\\nData:\\n{{$json.title || JSON.stringify($json)}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8",
+      "name": "OpenAI Trend Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        330
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "🚀 AI Startup Radar Alert\\n\\n{{$json[\"message\"] || JSON.stringify($json)}}",
+        "additionalFields": {}
+      },
+      "id": "9",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1700,
+        220
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = `# AI Startup Radar Report\\n\\nGenerated: ${new Date().toISOString()}\\n\\n## Insights\\n\\n${JSON.stringify(items.map(i => i.json), null, 2)}`;\n\nreturn [{ json: { markdown: report } }];"
+      },
+      "id": "10",
+      "name": "Generate Markdown Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "startup-radar-report.md",
+        "dataPropertyName": "markdown"
+      },
+      "id": "11",
+      "name": "Convert To File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1,
+      "position": [
+        1950,
+        450
+      ]
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch HackerNews IDs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Reddit Startups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HackerNews IDs": {
+      "main": [
+        [
+          {
+            "node": "Limit HN IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit HN IDs": {
+      "main": [
+        [
+          {
+            "node": "Fetch HN Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HN Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reddit Startups": {
+      "main": [
+        [
+          {
+            "node": "Format Reddit Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reddit Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Sources": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Trend Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Trend Analysis": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Markdown Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Markdown Report": {
+      "main": [
+        [
+          {
+            "node": "Convert To File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "startup-radar-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "AI"
+    },
+    {
+      "name": "Automation"
+    },
+    {
+      "name": "Startup"
+    }
+  ]
+}
